@@ -11,17 +11,22 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
+        get(name: string) {
+          return request.cookies.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+        set(name: string, value: string, options: any) {
+          request.cookies.set(name, value);
           supabaseResponse = NextResponse.next({
             request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          });
+          supabaseResponse.cookies.set(name, value, options);
+        },
+        remove(name: string, options: any) {
+          request.cookies.set(name, '');
+          supabaseResponse = NextResponse.next({
+            request,
+          });
+          supabaseResponse.cookies.set(name, '', options);
         },
       },
     }
@@ -32,15 +37,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  console.log('[Middleware] Intercepting:', request.nextUrl.pathname);
   // protect dashboard route
   if (
     !user &&
     request.nextUrl.pathname.startsWith('/dashboard')
   ) {
+    console.log('[Middleware] No user found! Redirecting to /login from', request.nextUrl.pathname);
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
+
+  console.log('[Middleware] User exists or route allowed:', request.nextUrl.pathname, !!user);
 
   return supabaseResponse
 }

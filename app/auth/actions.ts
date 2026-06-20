@@ -5,23 +5,31 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
 export async function login(formData: FormData) {
+  console.log('[LOGIN ACTION] Started login attempt');
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
 
   if (!email || !password) {
+    console.log('[LOGIN ACTION] Missing email or password');
     return { error: 'Email and password are required' };
   }
 
-  const supabase = createClient();
+  console.log(`[LOGIN ACTION] Attempting to sign in user: ${email}`);
+  const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
+  
 
   if (error) {
+    console.log('[LOGIN ACTION] Supabase error:', error.message);
     return { error: error.message };
   }
+
+  console.log('[LOGIN ACTION] Login successful. User:', data?.user?.id);
+  console.log('[LOGIN ACTION] Session:', !!data?.session);
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');
@@ -36,7 +44,7 @@ export async function signup(formData: FormData) {
     return { error: 'Name, email, and password are required' };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -48,9 +56,19 @@ export async function signup(formData: FormData) {
     },
   });
 
+  console.log('[SIGNUP ACTION] Error:', error);
+  console.log('[SIGNUP ACTION] Data session exists:', !!data?.session);
+  console.log('[SIGNUP ACTION] Data user exists:', !!data?.user);
+
   if (error) {
     return { error: error.message };
   }
+
+  // FORCE SET A TEST COOKIE
+  const { cookies } = await import('next/headers');
+  const cookieStore = await cookies();
+  cookieStore.set('test_cookie', 'works', { path: '/' });
+  console.log('[SIGNUP ACTION] Manually set test_cookie');
 
   // If email confirmation is disabled, user is signed in immediately
   // If enabled, they need to check their email
@@ -58,12 +76,14 @@ export async function signup(formData: FormData) {
     revalidatePath('/', 'layout');
     redirect('/dashboard');
   } else {
-    return { success: 'Please check your email to confirm your account.' };
+    // Usually means email already exists or confirm email is still required
+    console.log('[SIGNUP ACTION] Session is null! Returning check email message.');
+    return { success: 'Please check your email to confirm your account. (If you disabled confirm email, this means the email is already registered!)' };
   }
 }
 
 export async function signInWithGoogle() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
